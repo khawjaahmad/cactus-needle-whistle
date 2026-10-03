@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="color-scheme" content="dark" />
+    <title>Needle Test Studio</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Crect width='18' height='18' rx='4'/%3E%3Cpath d='M4 14 L14 4' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles/studio.css" />
+  </head>
+  <body>
+    <header>
+      <div class="bar">
+        <div class="brand">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+            <path d="M2 16 L16 2" stroke="#fff" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          Needle Test Studio <span class="label">plain-English tests · on-device</span>
+        </div>
+        <div class="status" role="status" aria-live="polite">
+          <span class="dot" id="dot" data-state="loading"></span>
+          <span class="label" id="status">Starting engine</span>
+        </div>
+      </div>
+      <div class="progress" aria-hidden="true"><i id="bar"></i></div>
+    </header>
+
+    <div class="studio">
+      <section class="pane" aria-label="Test case">
+        <div class="section">
+          <div class="row spread">
+            <label class="label" for="example">Test case</label>
+            <select id="example" aria-label="Load an example test case"></select>
+          </div>
+          <label class="sr-only" for="test-name">Test name</label>
+          <input id="test-name" type="text" maxlength="120" placeholder="Test name" />
+          <label class="sr-only" for="steps">Steps, one per line</label>
+          <textarea id="steps" spellcheck="false"></textarea>
+          <div class="meta">
+            One step per line, the way you'd write a manual test. Needle 3 maps each to one of Acme Admin's actions or
+            checks. Login: admin@acme.com / Passw0rd!
+          </div>
+          <div class="row">
+            <button class="btn btn-primary" id="run" type="button" disabled>Run in sandbox</button>
+            <button class="btn" id="dictate" type="button" disabled>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="5.5" y="1.5" width="5" height="8" rx="2.5" stroke="currentColor" stroke-width="1.5" />
+                <path
+                  d="M3 7.5a5 5 0 0 0 10 0M8 12.5V15"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                />
+              </svg>
+              <span id="dictate-label">Dictate</span>
+            </button>
+          </div>
+          <div class="row" role="status" aria-live="polite">
+            <span class="dot" id="speech-dot" data-state="loading"></span>
+            <span class="meta" id="speech-status">Starting Whistle</span>
+          </div>
+          <div class="level" id="level" hidden aria-hidden="true"><i id="level-bar"></i></div>
+        </div>
+        <div class="report" id="report" aria-live="polite">
+          <p class="empty flush">
+            Each step is decoded under a grammar built from Acme Admin's thirteen tools and gated by confidence before
+            it touches the app.
+          </p>
+        </div>
+      </section>
+
+      <section class="pane" aria-label="Output">
+        <div class="tabs" role="tablist">
+          <button role="tab" type="button" data-tab="app" aria-selected="true">App under test</button>
+          <button role="tab" type="button" data-tab="suite" aria-selected="false">Needle suite</button>
+          <button role="tab" type="button" data-tab="spec" aria-selected="false">Playwright</button>
+        </div>
+
+        <div class="panel" id="tab-app">
+          <div class="address">
+            <span class="label">Acme Admin</span>
+            <span class="url" id="app-url"></span>
+            <button class="btn" id="reset-app" type="button">Reset app</button>
+          </div>
+          <iframe id="app" title="App under test: Acme Admin"></iframe>
+        </div>
+
+        <div class="panel" id="tab-spec" hidden>
+          <div class="address">
+            <span class="url">acme.spec.ts</span>
+            <button class="btn" id="copy-spec" type="button" disabled>Copy</button>
+            <button class="btn btn-primary" id="download-spec" type="button" disabled>Download</button>
+          </div>
+          <pre
+            class="code"
+            id="spec"
+          ><span class="empty">A passing run appears here as a Playwright spec that repeats it without the model.</span></pre>
+        </div>
+
+        <div class="panel" id="tab-suite" hidden>
+          <div class="section">
+            <div class="row spread">
+              <span class="label">Acme Admin environment · 32 frozen cases</span>
+              <div class="row">
+                <label class="meta" for="min-conf">min_confidence</label>
+                <select id="min-conf">
+                  <option value="0">0</option>
+                  <option value="0.5" selected>0.5</option>
+                  <option value="0.7">0.7</option>
+                </select>
+                <button class="btn btn-primary" id="run-suite" type="button" disabled>Run suite</button>
+              </div>
+            </div>
+            <div class="meta">
+              The shape of the package's needle.environments: exact calls, [] for a missing value, no matching tool, a
+              negated request or an out-of-range value, and two calls from one request. Scored like run_tests: whole
+              calls compared, ungrounded or negated calls count as no call, and the suite fails on any critical case
+              (missing, negated or out-of-range).
+            </div>
+          </div>
+          <div class="report" id="suite-report"></div>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="src/studio/main.js"></script>
+  </body>
+</html>
