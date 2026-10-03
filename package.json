@@ -2,19 +2,36 @@
   "name": "needle-test-studio",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Plain-English test cases run on Cactus Needle 3 and dictated with Cactus Whistle, in the browser.",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "scripts": {
-    "start": "python3 -m http.server 8765",
-    "test": "node --test 'tests/**/*.test.mjs'",
-    "suite": "node scripts/suite.mjs --min-confidence 0.5",
-    "speech-check": "node scripts/speech-check.mjs --bias",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "suite": "node scripts/suite.ts --min-confidence 0.5",
+    "speech-check": "node scripts/speech-check.ts --bias",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
   "devDependencies": {
-    "prettier": "^3.9.9"
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "oxlint": "^1.86.0",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.1"
   }
 }

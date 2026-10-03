@@ -9,9 +9,12 @@ A case can also be dictated: Cactus Whistle transcribes it on the same CPU, in t
 the pauses between spoken steps become the lines.
 
 ```sh
-npm install                                               # Prettier only; the app has no build step
-npm start                                                 # serves the studio at http://localhost:8765
-npm test                                                  # unit tests for the gate, scoring, dictation split, specs
+npm install                                               # Node 22.18+ (runs the TypeScript scripts directly)
+npm run dev                                               # studio at http://localhost:5173, Acme Admin at /sandbox/
+npm run build                                             # typecheck, then build both pages into dist/
+npm run preview                                           # serve dist/ at http://localhost:4173
+npm test                                                  # Vitest: the gate, scoring, dictation split, case runner, specs
+npm run lint                                              # oxlint (React hooks and refresh rules)
 npm run suite -- --dump /tmp/acme.json                    # 32-case suite on the wasm engine (min_confidence 0.5)
 .venv/bin/python scripts/reference.py /tmp/acme.json      # same inputs through the Python package
 npm run speech-check -- clip.wav                          # Whistle on a 16 kHz mono clip, with keyword bias
@@ -19,11 +22,11 @@ npm run format                                            # Prettier over everyt
 ```
 
 The Node scripts download the pinned archives into `.ref/` on first run and check their SHA-256
-(`src/runtime/models.js` holds the pins the browser uses too).
+(`src/runtime/models.ts` holds the pins the browser uses too).
 
 ## How it uses Needle 3 (needle3-context.md, "How to Design Tools for Needle 3")
 
-- **The toolset is the product** (`src/acme/tools.js`): one tool per Acme Admin action and check
+- **The toolset is the product** (`src/acme/tools.ts`): one tool per Acme Admin action and check
   (`sign_in`, `invite_user`, `remove_user`, `set_two_factor`, `check_user`…). Closed sets are enums
   filled from the app's live state (its users, its message catalogue); free text is copied
   verbatim with its format in the description; polar pairs are one on/off enum.
@@ -40,7 +43,7 @@ The Node scripts download the pinned archives into `.ref/` on first run and chec
   "invite Eve Stone" lost the name). The cost: when a step changes the app's users, the enums
   change and the engine re-reads every schema, about 4.6 s for thirteen tools against 2.2 s for
   five (measured in Node). A check for a toast therefore also accepts a message that appeared after
-  the last action and has since faded (`src/acme/driver.js`); the exported spec still asserts it is
+  the last action and has since faded (`src/acme/driver.ts`); the exported spec still asserts it is
   visible. Only invited or removed users join `check_user`'s enum: with the sign-in email
   `admin@acme.com` in the schema, "invite Eve Stone" came back with role `admin`.
   **Facts, not instructions** (§8).
@@ -50,7 +53,7 @@ The Node scripts download the pinned archives into `.ref/` on first run and chec
 - **One deliberate departure**: `remove_user` needs 0.9, and the docs pair that bar with a
   confirmation. In a test case the written step ("Remove bob@acme.com") is the tester's
   confirmation, so above 0.9 it runs unattended; below it the studio asks.
-- **Test the environment, not a demo prompt**: `src/acme/cases.js` is a frozen 32-case suite in the six
+- **Test the environment, not a demo prompt**: `src/acme/cases.ts` is a frozen 32-case suite in the six
   categories `needle.environments` uses, scored like `run_tests`: whole calls compared, and every
   missing, negated and out-of-range case is critical, so one miss fails the suite. The studio runs
   it live too.
@@ -61,20 +64,20 @@ The Node scripts download the pinned archives into `.ref/` on first run and chec
   doesn't export. The build that does (`c7c415a`, vendored in `vendor/needle3-c7c415a/`) scores **24/32** on the
   frozen suite at 0.5 against the pin's 32/32 — the same deflated confidence the HF engine showed
   (a correct `check_message` at 0.01). The studio's gate is built on calibrated confidence, so
-  the speech build is kept to speech: `src/speech/worker.js` loads `whistle.cact` (16.9 MB, revision
+  the speech build is kept to speech: `src/speech/worker.ts` loads `whistle.cact` (16.9 MB, revision
   `b358dda`, SHA-256 checked and cached) into its own Emscripten instance, and tool decoding
-  stays on the pinned engine in `src/engine/worker.js`. `needle.h` makes each model process-global, so one
+  stays on the pinned engine in `src/engine/worker.ts`. `needle.h` makes each model process-global, so one
   engine per worker is what keeps them apart.
 - **Both builds call their binary `needle.wasm`**, and this one resolves that name against the
   worker's directory rather than the script it came from, so left alone it instantiates the
   tool-calling binary against the speech engine's JS. The exports line up by position and nothing
   throws: `needle_last_error` binds to a function wanting an i64 and `malloc` returns the same
   pointer every call. Both workers therefore fetch their own build's bytes and pass `wasmBinary`
-  (`src/runtime/engine-worker.js`); the builds also ignore `Module.locateFile`.
-- **Word timestamps are the step split** (`src/speech/core.js`): a gap of 0.65 s or more between words
+  (`src/runtime/engine-worker.ts`); the builds also ignore `Module.locateFile`.
+- **Word timestamps are the step split** (`src/speech/core.ts`): a gap of 0.65 s or more between words
   ends a step, as does sentence-final punctuation, so a dictated case arrives as lines rather than
   one paragraph. Dictation appends, so a case can be recorded in pieces.
-- **Keyword biasing comes from the live app state** — the same `src/acme/tools.js` source the enums
+- **Keyword biasing comes from the live app state** — the same `src/acme/tools.ts` source the enums
   are built from (`vocabulary()`): user names and emails, the pages, roles, settings and message
   catalogue. It is what makes a name survive the search: "Invite Chen Wei as an editor" decodes as
   _Chen way_ unbiased and _Chen Wei_ biased.
@@ -95,8 +98,12 @@ The Node scripts download the pinned archives into `.ref/` on first run and chec
   score decides; the 0.5 gate turns it into a question.
 - Reference: **32/32 cases give identical calls** on the wasm engine and the official Python
   package (`cactus-needle` 3.0.3) fed the same tools, facts and text.
-- Six example test cases pass in the browser with no step needing review; their exported specs
-  pass in Playwright, and a broken copy fails.
+- Five of the six example test cases pass in the browser with no step needing review; their
+  exported specs pass in Playwright, and a broken copy fails. "Turn off two-factor" stops at
+  'Confirm "Settings saved" appears', which decodes `[]` at 0.14.
+- The browser runs with the live clock in its facts (`date: … HH:MM`), and the engine is sensitive
+  to it: "invite Eve Stone at eve@acme.com" decodes role `editor` instead of `viewer` at some
+  minutes, so the suite tab can show 31/32. The Node suite pins `SYSTEM` and is stable.
 - Whistle: a 12.6 s dictation of a four-step case transcribes in **639 ms** (243 ms to first
   token, 176 tok/s) in Chrome and splits into its four steps; the same clip gives the same four
   steps in Node. A 4.5 s clip takes 252 ms. The suite is still 32/32 with the speech engine in
@@ -104,42 +111,49 @@ The Node scripts download the pinned archives into `.ref/` on first run and chec
 
 ## Layout
 
-Static files served from the repository root; each folder owns one concern.
+A Vite + React + TypeScript project with two pages. Domain logic is plain TypeScript with no
+framework in it; React owns only views and their state.
 
 ```
-index.html, styles/studio.css    the studio page and its styles
-src/studio/                      studio UI (ES modules)
-  main.js                        wiring only: engines, app frame, panels
-  case-runner.js, step-row.js    runs a written case step by step; one row per step
-  suite-runner.js                the 32-case suite in the browser
-  dictation-panel.js             Dictate button, level meter, transcript into the editor
-  editor.js, examples.js         test case editor and its examples
-  spec.js, spec-panel.js         Playwright spec from a passing run; copy and download
-  session.js, status.js, tabs.js busy/recording state, status lines, output tabs
-  format.js                      call signatures and step parsing
-src/engine/                      Needle 3: core.js (binding + gate), worker.js, agent.js (client)
-src/speech/                      Whistle: core.js (binding + step split), worker.js, dictation.js
-                                 (client), recorder.js + pcm-worklet.js (microphone)
-src/runtime/                     shared by both workers and the Node scripts: models.js (pins),
-                                 wasm-heap.js (heap strings), engine-worker.js (boot, download,
-                                 message protocol)
-src/shared/                      dom.js (`h`), worker-client.js (page side of the protocol)
-src/acme/                        the environment: tools.js, cases.js, driver.js
-sandbox/                         Acme Admin, the app under test: app.js, store.js, styles.css
-vendor/needle3-<rev>/            the two Emscripten builds, untouched
-scripts/                         suite.mjs, speech-check.mjs, reference.py, lib/weights.mjs
-tests/                           node:test unit tests
+index.html                       the studio page        → src/studio/main.tsx
+sandbox/index.html               Acme Admin, in a frame → src/sandbox/main.tsx
+src/studio/                      the studio (React)
+  App.tsx                        wiring only: engines, driver, tabs, panels
+  engines.ts                     the two engine workers, created once outside React
+  components/                    Header, CaseEditor, Dictation, CaseReport, StepRow, Tabs, AppFrame,
+                                 SuitePanel, SpecPanel
+  hooks/                         useCaseDraft, useCaseRunner, useSuiteRunner, useDictation,
+                                 useEngineStatus (worker status via useSyncExternalStore)
+  lib/                           run-case.ts (a case, step by step, through the gate and driver),
+                                 spec.ts, format.ts, examples.ts
+src/sandbox/                     Acme Admin (React): App.tsx (hash routes, state), pages/,
+                                 components/, store.ts (localStorage), router.ts, useToast.ts
+src/acme/                        the environment: tools.ts, cases.ts, driver.ts (page object +
+                                 Playwright recorder)
+src/engine/                      Needle 3: core.ts (binding + gate), types.ts, worker.ts, agent.ts
+src/speech/                      Whistle: core.ts (binding + step split), worker.ts, dictation.ts
+                                 (client), recorder.ts + pcm-worklet.ts (microphone)
+src/runtime/                     shared by both workers and the Node scripts: models.ts (pins),
+                                 wasm-heap.ts, emscripten.ts (module types), protocol.ts,
+                                 engine-worker.ts (boot, download, serve), worker-client.ts
+vendor/needle3-<rev>/            the two Emscripten builds, untouched, plus a needle.d.ts each
+scripts/                         suite.ts, speech-check.ts, reference.py, lib/weights.ts
+*.test.ts                        Vitest unit tests, next to the code they cover
 ```
 
-`engine/core.js`, `speech/core.js` and `runtime/*.js` are plain scripts (UMD) rather than modules,
-so the classic workers can `importScripts()` them and Node can `require()` them. For that reason
-the root `package.json` has no `"type": "module"`; `src/acme/` and `src/studio/`, the ES modules
-Node imports, declare it in their own `package.json`.
+The engines run in module workers. The vendored `needle.js` files are classic UMD scripts, so a
+small Vite plugin (`vite.config.ts`) swaps their `module.exports` tail for an ES default export at
+build time (the files on disk stay byte-for-byte as vendored); Node loads them as CommonJS through
+`vendor/package.json`. The scripts are TypeScript that Node runs as-is (type stripping), which is
+why the code uses only erasable syntax and `.ts` import extensions.
+
+The studio's driver sets field values through the element prototype's setter, the way typing does,
+because React ignores values assigned directly to a controlled input.
 
 ## Deploying
 
-Static files, no build step (Vercel: the repository root, preset "Other"; Netlify: publish
-the repository root). The engine is vendored from `Cactus-Compute/needle3` at revision `b274efc`; the 35.3 MB
+`npm run build` writes static files to `dist/` (Vercel: preset "Vite"; Netlify: build
+`npm run build`, publish `dist`). Both pages are served from the site root, `/` and `/sandbox/`. The engine is vendored from `Cactus-Compute/needle3` at revision `b274efc`; the 35.3 MB
 `needle3.cact` is fetched from the same revision on first visit, SHA-256 checked and cached.
 `vendor/needle3-c7c415a/` is the same repo at `c7c415a` and fetches `whistle.cact` the same way. Dictation needs
 a secure context for `getUserMedia`, so it is there on `https` and on `localhost` and absent

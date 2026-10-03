@@ -1,3 +1,4 @@
 vendor/
 .ref/
+dist/
 package-lock.json

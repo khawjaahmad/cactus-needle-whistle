@@ -1,7 +1,7 @@
-"""Replays a suite dump from scripts/suite.mjs through the official Python package (cactus-needle),
+"""Replays a suite dump from scripts/suite.ts through the official Python package (cactus-needle),
 binding the exact tools the wasm run bound, and reports where the two engines' calls differ.
 
-    node scripts/suite.mjs --dump /tmp/acme.json
+    node scripts/suite.ts --dump /tmp/acme.json
     .venv/bin/python scripts/reference.py /tmp/acme.json
 """
 
