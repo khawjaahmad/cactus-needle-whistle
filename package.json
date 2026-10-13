@@ -4,6 +4,14 @@
   "private": true,
   "type": "module",
   "description": "Plain-English test cases run on Cactus Needle 3 and dictated with Cactus Whistle, in the browser.",
+  "homepage": "https://needle.ahmad.wtf",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khawjaahmad/cactus-needle-whistle.git"
+  },
+  "bugs": {
+    "url": "https://github.com/khawjaahmad/cactus-needle-whistle/issues"
+  },
   "engines": {
     "node": ">=22.18"
   },
