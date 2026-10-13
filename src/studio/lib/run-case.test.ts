@@ -13,7 +13,7 @@ const turn = (verdict: Partial<Verdict> & Pick<Verdict, 'kind'>, confidence = 0.
   verdict: { calls: [], bar: 0.5, why: 'because', ...verdict },
 });
 
-/** Runs `lines` with one scripted turn per step; returns what passed and each step's last view. */
+/** Runs `lines` with one scripted turn per step; returns how many passed and each step's last view. */
 async function run(lines: string[], turns: Turn[], { confirm = true, perform = async (c: FunctionCall) => c } = {}) {
   const views: StepView[] = lines.map((text) => ({ text, state: 'queued' }));
   const asked: string[][] = [];
@@ -26,7 +26,7 @@ async function run(lines: string[], turns: Turn[], { confirm = true, perform = a
       state: () => SEED,
       perform: async (c) => {
         await perform(c);
-        return { detail: `did ${c.name}`, lines: [`// ${c.name}`] };
+        return { detail: `did ${c.name}` };
       },
     },
     update: (i, patch) => {
@@ -39,9 +39,9 @@ async function run(lines: string[], turns: Turn[], { confirm = true, perform = a
 }
 
 describe('runCase', () => {
-  it('runs confident steps and records their lines', async () => {
+  it('runs confident steps', async () => {
     const { done, views } = await run(['Sign out'], [turn({ kind: 'execute', calls: [call('sign_out')] })]);
-    expect(done).toEqual([{ text: 'Sign out', lines: ['// sign_out'] }]);
+    expect(done).toBe(1);
     expect(views[0]).toMatchObject({ state: 'passed', detail: 'did sign_out' });
     expect(views[0].decision).toMatchObject({ calls: 'sign_out()', confidence: '0.90', why: 'because' });
   });
@@ -51,7 +51,7 @@ describe('runCase', () => {
       ['a', 'b', 'c'],
       [turn({ kind: 'execute', calls: [call('sign_out')] }), turn({ kind: 'refuse' })],
     );
-    expect(done).toHaveLength(1);
+    expect(done).toBe(1);
     expect(views.map((v) => v.state)).toEqual(['passed', 'failed', 'skipped']);
     expect(views[1].detail).toBe('Not run.');
   });

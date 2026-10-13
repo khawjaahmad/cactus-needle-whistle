@@ -1,31 +1,20 @@
-/*
- * Needle 3: the engine binding and the call gate. The worker owns the engine; the Node suite
- * (scripts/suite.ts) drives the same binding. The gate sets its bar by risk and refuses negated
- * or ungrounded calls, as the package's run() does.
- */
+/** Needle 3: the engine binding and the call gate. */
 import type { NeedleModule } from '../runtime/emscripten.ts';
 import { createHeap } from '../runtime/wasm-heap.ts';
 import type { NeedleResponse, ToolEntry, ToolSchema, Turn, Verdict } from './types.ts';
 
-// needle_complete returns tokens generated, not bytes, and truncates a short buffer silently
-// (needle_jni.cpp), so the response gets room it will never plausibly fill.
 const RESPONSE_CAPACITY = 1 << 18;
 const MAX_NEW_TOKENS = 512;
 
-// The bar is set by what a wrong action costs (§6).
 const AUTO_THRESHOLD = 0.5;
 const HIGH_RISK_THRESHOLD = 0.9;
 
 export type Engine = ReturnType<typeof createEngine>;
 
-/**
- * Wraps an instantiated Emscripten module around one loaded archive. The engine is a single
- * global, non-thread-safe instance, so exactly one caller (the worker) may own it.
- */
+/** Wraps an instantiated Emscripten module around one loaded archive. */
 export function createEngine(M: NeedleModule, cact: Uint8Array) {
   const heap = createHeap(M);
 
-  // The engine copies the archive during load (android/tools/probes/alias_probe.c).
   const loaded = heap.withBytes(cact, (ptr, length) => M._needle_load(ptr, BigInt(length)));
   if (loaded !== 0) throw new Error(`The engine rejected needle3.cact (code ${loaded}).`);
 
@@ -60,22 +49,13 @@ export interface CatalogEntry {
   risky: boolean;
 }
 
-/**
- * Tool entries arrive as `{risk, ...schema}`. `risk` only feeds the gate; the engine sees the
- * rest of the schema, triggers included, and applies the triggers itself (§9).
- */
+/** Tool entries arrive as `{risk, ...schema}`. */
 export const loadCatalog = (entries: ToolEntry[]): CatalogEntry[] =>
   entries.map(({ risk, ...schema }) => ({ name: schema.name, schema, risky: risk === 'high' }));
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
-/**
- * The routing the Needle docs recommend (§6): act when there are calls at or above the bar,
- * show the call and ask when there are calls or withheld calls below it, refuse when there is
- * nothing. The bar is set by what a wrong action costs: 0.5, or 0.9 for tools marked
- * `risk: 'high'`, which also always ask. Calls the engine flags as negated or ungrounded are
- * refused, as the package's run() and run_tests do; calls with no calibrated score are asked about.
- */
+/** The gate: act at or above the bar, ask below it, refuse when there is no call. */
 export function judge(response: NeedleResponse, risky = new Set<string>(), threshold = AUTO_THRESHOLD): Verdict {
   const validation = response.validation ?? {};
   const calls = response.function_calls ?? [];
@@ -87,8 +67,6 @@ export function judge(response: NeedleResponse, risky = new Set<string>(), thres
   const ask = (why: string, shown = calls): Verdict => ({ kind: 'confirm', calls: shown, bar, why });
   const refuse = (why: string): Verdict => ({ kind: 'refuse', calls: [], bar, why });
 
-  // e.g. error_code "truncated": the model reached for a value the grammar doesn't allow (an email
-  // outside the enum) and ran out of tokens. No call was decoded, so nothing runs.
   if (response.success === false) {
     return refuse(`No call decoded: ${response.error || response.error_code || 'the engine gave no reason'}.`);
   }
@@ -105,12 +83,7 @@ export function judge(response: NeedleResponse, risky = new Set<string>(), thres
   return { kind: 'execute', calls, bar, why: `Confidence ${pct(confidence)} clears the ${pct(bar)} bar.` };
 }
 
-/**
- * One standalone request against the page's current tools: bind, fresh conversation, decode, gate.
- * Every tool is declared. This engine puts every declared tool into the prompt (the archive has no
- * retrieval head), and Acme Admin's thirteen sit well under the roughly two dozen past which the
- * porting guide says accuracy falls. A shortlist of five, tried before, left the right tool out.
- */
+/** One standalone request against the page's current tools: bind, fresh conversation, decode, gate. */
 export function runTurn(engine: Engine, request: string, facts: string, catalog: CatalogEntry[]): Turn {
   if (!engine.bind(facts, JSON.stringify(catalog.map((t) => t.schema)))) engine.reset();
   const response = engine.complete(request);

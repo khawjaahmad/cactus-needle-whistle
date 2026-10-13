@@ -3,7 +3,6 @@ import { useRef, useState } from 'react';
 import type { AcmeDriver } from '../../acme/driver.ts';
 import type { Agent } from '../../engine/agent.ts';
 import { runCase, type StepView } from '../lib/run-case.ts';
-import { toSpec } from '../lib/spec.ts';
 
 export interface CaseReport {
   steps: StepView[];
@@ -14,13 +13,10 @@ export interface CaseReport {
 interface Options {
   agent: Pick<Agent, 'ask'>;
   driver: AcmeDriver;
-  /** Where the exported spec opens the app. */
-  specAppUrl: string;
   onStart: () => void;
-  onPassed: (spec: string) => void;
 }
 
-export function useCaseRunner({ agent, driver, specAppUrl, onStart, onPassed }: Options) {
+export function useCaseRunner({ agent, driver, onStart }: Options) {
   const [report, setReport] = useState<CaseReport | null>(null);
   const [running, setRunning] = useState(false);
   const answerConfirm = useRef<((yes: boolean) => void) | null>(null);
@@ -28,7 +24,7 @@ export function useCaseRunner({ agent, driver, specAppUrl, onStart, onPassed }: 
   const update = (index: number, patch: Partial<StepView>) =>
     setReport((r) => r && { ...r, steps: r.steps.map((step, i) => (i === index ? { ...step, ...patch } : step)) });
 
-  async function run({ name, lines }: { name: string; lines: string[] }) {
+  async function run({ lines }: { lines: string[] }) {
     if (!lines.length || running) return;
     setRunning(true);
     try {
@@ -47,10 +43,9 @@ export function useCaseRunner({ agent, driver, specAppUrl, onStart, onPassed }: 
           }),
       });
 
-      const passed = done.length === lines.length;
+      const passed = done === lines.length;
       const seconds = ((performance.now() - started) / 1000).toFixed(1);
       setReport((r) => r && { ...r, result: { passed, seconds } });
-      if (passed) onPassed(toSpec({ name, appUrl: specAppUrl, steps: done }));
     } finally {
       setRunning(false);
     }

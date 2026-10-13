@@ -4,18 +4,18 @@ import { StepRow } from './StepRow.tsx';
 interface Props {
   report: Report | null;
   onAnswer: (yes: boolean) => void;
-  onViewSpec: () => void;
 }
 
-/** The last run: a summary, one row per step, and the way to its spec when it passed. */
-export function CaseReport({ report, onAnswer, onViewSpec }: Props) {
+/** The run as a live event timeline, under a segmented progress bar. */
+export function CaseReport({ report, onAnswer }: Props) {
   if (!report) {
     return (
-      <div className="report" aria-live="polite">
-        <p className="empty flush">
-          Each step is decoded under a grammar built from Acme Admin's thirteen tools and gated by confidence before it
-          touches the app.
-        </p>
+      <div className="report">
+        <div className="idle-core" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
       </div>
     );
   }
@@ -24,24 +24,29 @@ export function CaseReport({ report, onAnswer, onViewSpec }: Props) {
   const passed = steps.filter((s) => s.state === 'passed').length;
   return (
     <div className="report" aria-live="polite">
-      <div className="summary" data-ok={result?.passed}>
-        <strong>{result ? (result.passed ? 'Passed' : 'Failed') : 'Running…'}</strong>
-        <span className="meta">
-          {result ? `${passed}/${steps.length} steps · ${result.seconds} s` : `${passed}/${steps.length}`}
-        </span>
+      <div className="run-head" data-ok={result?.passed}>
+        <div className="segments" aria-hidden="true">
+          {steps.map((step, i) => (
+            <i key={i} data-state={step.state} />
+          ))}
+        </div>
+        <div className="run-score">
+          <strong key={passed} className="count">{`${passed}/${steps.length}`}</strong>
+          {result && (
+            <>
+              <span className="badge" data-ok={result.passed}>
+                {result.passed ? 'Passed' : 'Failed'}
+              </span>
+              <span className="meta">{result.seconds} s</span>
+            </>
+          )}
+        </div>
       </div>
-      <ol className="steps">
+      <ol className="timeline">
         {steps.map((step, i) => (
-          <StepRow key={i} index={i} step={step} onAnswer={onAnswer} />
+          <StepRow key={i} step={step} onAnswer={onAnswer} />
         ))}
       </ol>
-      <div className="row">
-        {result?.passed && (
-          <button className="btn" type="button" onClick={onViewSpec}>
-            View Playwright spec
-          </button>
-        )}
-      </div>
     </div>
   );
 }

@@ -1,13 +1,4 @@
-/*
- * Runs the Acme Admin suite (src/acme/cases.ts) on the wasm engine the way the studio does: every
- * tool declared, one fresh turn per case. Scores like run_tests (§11).
- *
- *     node scripts/suite.ts [--min-confidence 0.5] [--dump cases.json]
- *
- * --dump writes each case's bound tools and response, for scripts/reference.py to replay through
- * the official Python package. Exits 0 on run_tests' rule: at least 29 of 32 pass and no critical
- * case fails.
- */
+/** Runs the 32-case Acme Admin suite on the wasm engine, the way the studio does. */
 import { writeFileSync } from 'node:fs';
 import { PASS_BAR, SEEN, TEST_CASES, matches, scored, suitePasses } from '../src/acme/cases.ts';
 import { SEED, SYSTEM, acmeTools } from '../src/acme/tools.ts';

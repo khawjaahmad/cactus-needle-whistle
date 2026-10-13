@@ -195,10 +195,6 @@ td {
   padding: 10px 16px;
   border-radius: 8px;
 }
-.agent-hit {
-  outline: 3px solid #0099ff !important;
-  outline-offset: 2px;
-}
 [hidden] {
   display: none !important;
 }

@@ -1,12 +1,12 @@
-export type TabId = 'app' | 'suite' | 'spec';
+export type TabId = 'app' | 'suite' | 'whistle';
 
 const TABS: [TabId, string][] = [
   ['app', 'App under test'],
   ['suite', 'Needle suite'],
-  ['spec', 'Playwright'],
+  ['whistle', 'Whistle'],
 ];
 
-/** The output tabs. Panels stay mounted and are only hidden, so the app frame keeps its state. */
+/** The output tabs. */
 export function Tabs({ active, onSelect }: { active: TabId; onSelect: (tab: TabId) => void }) {
   return (
     <div className="tabs" role="tablist">

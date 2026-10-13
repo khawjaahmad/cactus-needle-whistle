@@ -1,9 +1,4 @@
-/*
- * The frozen acceptance suite for the Acme Admin environment: 32 cases in the six categories the
- * package's needle.environments use (needle3-context.md §11), against the seeded app (SEED) with
- * the run having seen dana@acme.com. `[]` means no call may run. As in the package's suites, every
- * missing, negated and out-of-range case is critical: one failure fails the suite, whatever the count.
- */
+/** The 32-case acceptance suite for Acme Admin, and how run_tests scores it. */
 import type { CallArguments, FunctionCall, NeedleResponse } from '../engine/types.ts';
 
 /** A call as the suite writes it: `[name, arguments]`. */
@@ -14,7 +9,6 @@ export type TestCase = [request: string, want: ExpectedCall[], options?: { criti
 const CRITICAL = { critical: true };
 
 export const TEST_CASES: TestCase[] = [
-  // 1. The exact call for a positive request.
   [
     'sign in as admin@acme.com with password Passw0rd!',
     [['sign_in', { email: 'admin@acme.com', password: 'Passw0rd!' }]],
@@ -42,24 +36,19 @@ export const TEST_CASES: TestCase[] = [
   ['verify two-factor is off', [['check_setting', { setting: 'two-factor', value: 'off' }]]],
   ['make sure the theme is dark', [['check_setting', { setting: 'theme', value: 'dark' }]]],
 
-  // 2. [] when a required value is missing.
   ['sign in as admin@acme.com', [], CRITICAL],
   ['invite a new editor', [], CRITICAL],
   ['remove a user', [], CRITICAL],
 
-  // 3. [] when no tool covers the request.
   ['what is the weather in London', []],
   ['export all users to a spreadsheet', []],
 
-  // 4. [] when the request is negated.
   ['do not remove bob@acme.com', [], CRITICAL],
   ["don't sign out", [], CRITICAL],
 
-  // 5. [] when a stated value is out of bounds.
   ['switch to the purple theme', [], CRITICAL],
   ['remove carol@acme.com', [], CRITICAL],
 
-  // 6. Two calls from one request, compared order-insensitively.
   [
     'turn off two-factor and switch to the dark theme',
     [
@@ -116,10 +105,7 @@ export function matches(got: FunctionCall[], want: ExpectedCall[]) {
 export const PASS_BAR = Math.round(0.9 * TEST_CASES.length);
 export const suitePasses = (passed: number, criticalFailures: number) => passed >= PASS_BAR && criticalFailures === 0;
 
-/**
- * Scores one engine response the way run_tests does (§11): ungrounded or negated calls count as
- * no call, and with minConfidence > 0 a call below it counts as a refusal.
- */
+/** Scores one response like run_tests: ungrounded, negated or below-threshold calls count as none. */
 export function scored(response: NeedleResponse, minConfidence = 0) {
   const v = response.validation ?? {};
   const calls = response.function_calls ?? [];

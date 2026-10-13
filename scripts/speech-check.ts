@@ -1,17 +1,4 @@
-/*
- * Runs Whistle on the vendored wasm speech engine, the way src/speech/worker.ts does, and prints
- * the transcript and the steps it splits into. The browser fetches whistle.cact from Hugging
- * Face; this caches it under .ref/ instead.
- *
- *     node scripts/speech-check.ts [--bias] clip.wav [more.wav…]   # 16 kHz mono WAV
- *
- * --bias passes Acme Admin's live vocabulary as keywords, as the studio does, and prints the
- * transcript with and without it.
- *
- * Make a clip with macOS `say`, pausing between steps the way a tester would:
- *     say "Open settings. [[slnc 700]] Verify two-factor is off." -o raw.aiff
- *     afconvert -f WAVE -d LEI16@16000 -c 1 raw.aiff clip.wav
- */
+/** Transcribes 16 kHz mono WAV clips with Whistle and prints the text and the steps. */
 import { readFileSync } from 'node:fs';
 import { SEED, vocabulary } from '../src/acme/tools.ts';
 import { WHISTLE } from '../src/runtime/models.ts';
@@ -58,7 +45,6 @@ for (const clip of clips) {
   const started = performance.now();
   const plain = engine.transcribe(pcm);
   const elapsed = performance.now() - started;
-  // With --bias, the steps come from the biased pass, which is the one the studio runs.
   const result = bias ? engine.transcribe(pcm, { keywords: vocabulary(SEED).join('\n') }) : plain;
   const steps = toSteps(result);
 

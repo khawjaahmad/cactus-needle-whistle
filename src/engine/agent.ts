@@ -1,7 +1,4 @@
-/*
- * Client for the Needle 3 worker: loads the engine off the main thread and runs one turn against
- * whatever tools the caller binds (the Acme Admin environment's, for this studio).
- */
+/** Client for the Needle 3 worker: one gated turn per request. */
 import { createWorkerClient } from '../runtime/worker-client.ts';
 import type { RunRequest, ToolEntry, Turn } from './types.ts';
 

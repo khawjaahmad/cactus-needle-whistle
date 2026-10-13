@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHeap } from './wasm-heap.ts';
 
-// A bump allocator over a plain array, standing in for an Emscripten module.
 function fakeModule() {
   let next = 8;
   const freed: number[] = [];

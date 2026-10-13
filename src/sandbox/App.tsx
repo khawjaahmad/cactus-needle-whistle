@@ -1,12 +1,4 @@
-/*
- * Acme Admin: the app under test. A small but real admin UI (sign-in, dashboard, users, settings)
- * with the behaviour test cases exercise: validation errors, guarded routes, redirects, a search
- * filter, invites, removal and saved settings. State lives in localStorage (store.ts); ?reset
- * starts clean.
- *
- * The ids, labels and roles here are what the studio's driver and the exported Playwright specs
- * find controls by (src/acme/driver.ts), so change them together.
- */
+/** Acme Admin: the app under test. */
 import { useEffect, useState, type ReactNode } from 'react';
 import type { AcmeUser } from '../acme/tools.ts';
 import { Nav } from './components/Nav.tsx';
@@ -32,7 +24,6 @@ export function App({ initial }: { initial: InitialState }) {
   const [signedIn, setSignedIn] = useState(initial.signedIn);
   const [toast, showToast] = useToast();
 
-  // Guarded routes send a signed-out visitor to sign in; a signed-in one skips the login page.
   const redirect = path !== '/login' && !signedIn ? '/login' : path === '/login' && signedIn ? '/dashboard' : null;
   useEffect(() => {
     if (redirect) navigate(redirect);

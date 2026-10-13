@@ -1,26 +1,32 @@
-/*
- * Carries out Acme Admin tool calls (acme/tools.ts) on the app in the studio's frame, through the
- * app's real controls, and records each one as Playwright lines. The model picks the tool and
- * fills its arguments; this is the app's own automation layer, so it knows its controls by id and
- * label, the way a hand-written page object would.
- */
+/** Carries out Acme Admin tool calls on the app in the studio's frame, through its real controls. */
 import type { CallArguments, FunctionCall } from '../engine/types.ts';
 import { USERS_KEY } from '../sandbox/store.ts';
 import type { AcmeState } from './tools.ts';
 
 const WAIT_MS = 3000;
 const POLL_MS = 100;
-const q = JSON.stringify;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export class StepError extends Error {}
 
-/** What one call did, and the Playwright lines that repeat it. */
+/** What one call did. */
 export interface Outcome {
   detail: string;
-  lines: string[];
 }
+
+/** Where the agent is acting, in the frame's viewport coordinates, for the studio's cursor. */
+export interface AgentTarget {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type AgentAction = 'click' | 'type' | 'select' | 'read';
+
+export type AgentEvent =
+  { type: 'target'; action: AgentAction; target: AgentTarget } | { type: 'navigate'; path: string } | { type: 'idle' };
 
 export interface AcmeDriver {
   perform(call: FunctionCall): Promise<Outcome>;
@@ -28,15 +34,26 @@ export interface AcmeDriver {
   state(): AcmeState;
   /** Loads the app fresh (?reset clears its data). */
   reset(): Promise<void>;
-  /** Call on every load of the frame: drives that frame, and watches its new document for status messages. */
+  /** Call on every frame load: drives that frame and watches it for status messages. */
   attach(frame: HTMLIFrameElement): void;
+  /** Every move the agent makes, for whoever draws it; returns the unsubscribe. */
+  onEvent(listener: (event: AgentEvent) => void): () => void;
+}
+
+interface DriverOptions {
+  /** The app URL a path is appended to, e.g. '/sandbox/#'. */
+  baseUrl: string;
+  /** A pause before acting on a control, so a cursor drawn over the app gets there first. */
+  paceMs?: number;
+  /** A pause per typed character; 0 sets the whole value at once. */
+  typeMs?: number;
 }
 
 /** The app's address with `?reset`, so it starts clean; a new token makes each reset a real load. */
 export const resetUrl = (baseUrl: string, token: string | number = Date.now()) =>
   `${baseUrl.replace('#', `?reset=${token}#`)}/login`;
 
-/** Polls until `find` returns something truthy, like Playwright's auto-waiting. */
+/** Polls until `find` returns something truthy, so a step waits for the app to catch up. */
 async function waitFor<T>(find: () => T, timeout = WAIT_MS): Promise<T | null> {
   const until = performance.now() + timeout;
   for (;;) {
@@ -49,10 +66,7 @@ async function waitFor<T>(find: () => T, timeout = WAIT_MS): Promise<T | null> {
 
 type Field = HTMLInputElement | HTMLSelectElement;
 
-/**
- * Sets a field the way typing does. React (which Acme Admin is built with) tracks values assigned
- * through the element and would ignore the input event, so this goes through the prototype's setter.
- */
+/** Sets a field the way typing does. */
 function setValue(el: Field, value: string) {
   Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set?.call(el, value);
 }
@@ -62,12 +76,8 @@ function fire(el: Element, type: string) {
   el.dispatchEvent(new view.Event(type, { bubbles: true }));
 }
 
-/**
- * Drives the <iframe> holding Acme Admin, which it learns from `attach` on the frame's first load.
- *
- * @param baseUrl  the app URL a path is appended to, e.g. '/sandbox/#'
- */
-export function createAcmeDriver({ baseUrl }: { baseUrl: string }) {
+/** Drives the <iframe> holding Acme Admin, which it learns from `attach` on the frame's first load. */
+export function createAcmeDriver({ baseUrl, paceMs = 0, typeMs = 0 }: DriverOptions) {
   let attached: HTMLIFrameElement | null = null;
   const frame = () => {
     if (!attached) throw new Error('The app has not loaded yet.');
@@ -79,12 +89,14 @@ export function createAcmeDriver({ baseUrl }: { baseUrl: string }) {
   const path = () => win().location.hash.slice(1) || '/login';
   const visibleText = () => doc().body.innerText;
 
-  let lines: string[] = [];
-  const record = (...code: string[]) => lines.push(...code);
+  const listeners = new Set<(event: AgentEvent) => void>();
+  const emit = (event: AgentEvent) => listeners.forEach((listener) => listener(event));
+  const aim = async (el: Element, action: AgentAction) => {
+    const { x, y, width, height } = el.getBoundingClientRect();
+    emit({ type: 'target', action, target: { x, y, width, height } });
+    await sleep(paceMs);
+  };
 
-  // Status messages (toasts) the app showed since the last action. A toast lasts 3 s, and after a
-  // step changes the app's users the engine re-reads every tool schema (about 4.6 s) before the
-  // next step's check decodes, so a check also accepts a message that appeared and has gone.
   let shown: string[] = [];
   function attach(el: HTMLIFrameElement) {
     attached = el;
@@ -97,47 +109,47 @@ export function createAcmeDriver({ baseUrl }: { baseUrl: string }) {
     ).observe(doc().body, { childList: true, subtree: true });
   }
 
-  async function flash(el: HTMLElement) {
+  async function flash(el: HTMLElement, action: AgentAction) {
     el.scrollIntoView({ block: 'nearest' });
-    el.classList.add('agent-hit');
-    setTimeout(() => el.classList.remove('agent-hit'), 700);
+    await aim(el, action);
     await sleep(150);
   }
 
-  async function control<T extends HTMLElement>(selector: string, what: string) {
+  async function control<T extends HTMLElement>(selector: string, what: string, action: AgentAction) {
     const el = await waitFor(() => $<T>(selector));
     if (!el) throw new StepError(`${what} is not on ${path()}.`);
-    await flash(el);
+    await flash(el, action);
     return el;
   }
 
   async function fill(selector: string, label: string, value: string) {
-    const el = await control<HTMLInputElement>(selector, `The ${label} field`);
+    const el = await control<HTMLInputElement>(selector, `The ${label} field`, 'type');
     el.focus();
-    setValue(el, value);
-    fire(el, 'input');
+    const steps = typeMs && value ? [...value].map((_, i) => value.slice(0, i + 1)) : [value];
+    for (const typed of steps) {
+      setValue(el, typed);
+      fire(el, 'input');
+      if (typeMs) await sleep(typeMs);
+    }
     fire(el, 'change');
-    record(`await page.getByLabel(${q(label)}, { exact: true }).fill(${q(value)});`);
   }
 
   async function select(selector: string, label: string, value: string) {
-    const el = await control<HTMLSelectElement>(selector, `The ${label} dropdown`);
+    const el = await control<HTMLSelectElement>(selector, `The ${label} dropdown`, 'select');
     setValue(el, value);
     fire(el, 'change');
-    record(`await page.getByLabel(${q(label)}, { exact: true }).selectOption(${q(value)});`);
   }
 
   async function click(selector: string, role: string, name: string) {
-    const el = await control(selector, `The “${name}” ${role}`);
+    const el = await control(selector, `The “${name}” ${role}`, 'click');
     el.click();
-    record(`await page.getByRole(${q(role)}, { name: ${q(name)}, exact: true }).click();`);
     await sleep(150);
   }
 
   async function go(page: string) {
     if (path() === `/${page}`) return;
+    emit({ type: 'navigate', path: `/${page}` });
     win().location.hash = `#/${page}`;
-    record(`await page.goto(APP_URL + ${q(`/${page}`)});`);
     await sleep(150);
   }
 
@@ -149,14 +161,17 @@ export function createAcmeDriver({ baseUrl }: { baseUrl: string }) {
   }
 
   async function setCheckbox(selector: string, label: string, on: boolean) {
-    const box = await control<HTMLInputElement>(selector, `The ${label} checkbox`);
+    const box = await control<HTMLInputElement>(selector, `The ${label} checkbox`, 'click');
     if (box.checked !== on) box.click();
-    record(`await page.getByLabel(${q(label)}, { exact: true }).${on ? 'check' : 'uncheck'}();`);
   }
 
   const expectText = async (text: string) => {
     const ok = await waitFor(() => visibleText().includes(text) || shown.includes(text));
     if (!ok) throw new StepError(`Expected “${text}” to be shown on ${path()}; it is not.`);
+    const where = [...doc().querySelectorAll('[role=status], h1, h2, p, td, span, div')]
+      .reverse()
+      .find((el) => el.textContent?.includes(text));
+    if (where) await aim(where, 'read');
   };
 
   const userRow = (email: string) =>
@@ -218,33 +233,27 @@ export function createAcmeDriver({ baseUrl }: { baseUrl: string }) {
     async check_page({ page }) {
       const ok = await waitFor(() => path() === `/${page}`);
       if (!ok) throw new StepError(`Expected to be on /${page}; on ${path()}.`);
-      record(`await expect(page).toHaveURL(/\\/${page}$/);`);
+      const heading = $('h1, h2');
+      if (heading) await aim(heading, 'read');
       return `On /${page}`;
     },
     async check_message({ message }) {
       await expectText(message);
-      record(`await expect(page.getByText(${q(message)}).first()).toBeVisible();`);
       return `“${message}” is shown`;
     },
     async check_user({ email, status }) {
       await go('users');
       if ($<HTMLInputElement>('#search')?.value) await fill('#search', 'Search', '');
-      const row = `page.getByRole("row", { name: new RegExp(${q(email.replace(/[.+]/g, '\\$&'))}) })`;
       if (status === 'removed') {
         const gone = await waitFor(() => !userRow(email));
         if (!gone) throw new StepError(`Expected ${email} to be removed; it is still listed.`);
-        record(`await expect(${row}).toHaveCount(0);`);
       } else {
         const tr = await waitFor(() => userRow(email));
         if (!tr) throw new StepError(`Expected ${email} to be ${status}; it is not listed.`);
+        await aim(tr, 'read');
         const actual = tr.cells[3].textContent ?? '';
         if (status === 'pending' && actual !== 'Pending')
           throw new StepError(`Expected ${email} to be pending; it is ${actual.toLowerCase()}.`);
-        record(
-          status === 'pending'
-            ? `await expect(${row}).toContainText("Pending");`
-            : `await expect(${row}).toBeVisible();`,
-        );
       }
       return `${email} is ${status}`;
     },
@@ -253,18 +262,14 @@ export function createAcmeDriver({ baseUrl }: { baseUrl: string }) {
       if (!valid.includes(value)) throw new StepError(`${setting} can be ${valid.join(' or ')}, not ${value}.`);
       await go('settings');
       if (setting === 'theme') {
-        const actual = (await control<HTMLSelectElement>('#theme', 'The Theme dropdown')).value.toLowerCase();
+        const actual = (await control<HTMLSelectElement>('#theme', 'The Theme dropdown', 'read')).value.toLowerCase();
         if (actual !== value) throw new StepError(`Expected the theme to be ${value}; it is ${actual}.`);
-        record(`await expect(page.getByLabel("Theme", { exact: true })).toHaveValue(${q(capitalize(value))});`);
       } else {
         const [selector, label] =
           setting === 'two-factor' ? ['#two-factor', 'Two-factor authentication'] : ['#alerts', 'Email alerts'];
-        const on = (await control<HTMLInputElement>(selector, `The ${label} checkbox`)).checked;
+        const on = (await control<HTMLInputElement>(selector, `The ${label} checkbox`, 'read')).checked;
         if (on !== (value === 'on'))
           throw new StepError(`Expected ${setting} to be ${value}; it is ${on ? 'on' : 'off'}.`);
-        record(
-          `await expect(page.getByLabel(${q(label)}, { exact: true })).${value === 'on' ? '' : 'not.'}toBeChecked();`,
-        );
       }
       return `${setting} is ${value}`;
     },
@@ -274,10 +279,13 @@ export function createAcmeDriver({ baseUrl }: { baseUrl: string }) {
     async perform(call) {
       const tool = tools[call.name];
       if (!tool) throw new StepError(`Acme Admin has no action ${call.name}.`);
-      lines = [];
       if (!call.name.startsWith('check_')) shown = [];
-      const detail = await tool(call.arguments ?? {});
-      return { detail, lines };
+      try {
+        const detail = await tool(call.arguments ?? {});
+        return { detail };
+      } finally {
+        emit({ type: 'idle' });
+      }
     },
 
     state() {
@@ -298,5 +306,10 @@ export function createAcmeDriver({ baseUrl }: { baseUrl: string }) {
     },
 
     attach,
+
+    onEvent(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
   } satisfies AcmeDriver;
 }

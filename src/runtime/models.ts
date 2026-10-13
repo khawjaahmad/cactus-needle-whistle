@@ -1,8 +1,4 @@
-/**
- * The model archives the studio runs, pinned by revision. A .cact is tied to the engine build that
- * reads it (§12), so each pin names the vendored build it pairs with. The workers and the Node
- * scripts import the same pins, so the browser and the checks always load the same bytes.
- */
+/** The model archives the studio runs, pinned by revision. */
 
 export interface ModelPin {
   /** What the status line calls it. */
@@ -23,7 +19,7 @@ const pin = ({ repo, ...model }: Omit<ModelPin, 'url' | 'cacheName'> & { repo: s
   cacheName: `${repo}-${model.revision.slice(0, 7)}`,
 });
 
-/** Tool calling. Don't bump it without re-running the suite (README, "Deploying"). */
+/** Tool calling. */
 export const NEEDLE3 = pin({
   name: 'the model',
   repo: 'needle3',
@@ -34,7 +30,7 @@ export const NEEDLE3 = pin({
   engine: 'needle3-b274efc',
 });
 
-/** Speech. Its engine build (c7c415a) is the one that exports needle_transcribe. */
+/** Speech. */
 export const WHISTLE = pin({
   name: 'Whistle',
   repo: 'whistle',

@@ -1,10 +1,4 @@
-/**
- * The message protocol between a page and an engine worker (engine-worker.ts serves it,
- * worker-client.ts calls it):
- *   in:  {type: <requestType>, id, ...}
- *   out: {type: 'progress', loaded, total} · {type: 'ready', loadMs, cached}
- *        {type: 'result', id, ...handle(), ms} · {type: 'error', id?, message}
- */
+/** Messages between a page and an engine worker. */
 
 export type WorkerError = { type: 'error'; id?: number; message: string };
 export type WorkerResult<T> = T & { type: 'result'; id: number; ms: number };

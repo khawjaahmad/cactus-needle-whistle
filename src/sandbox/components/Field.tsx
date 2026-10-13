@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-/** A labelled control; the studio's driver and the exported specs find controls by these labels. */
+/** A labelled control; the studio's driver finds controls by these labels. */
 export function Field({
   id,
   label,

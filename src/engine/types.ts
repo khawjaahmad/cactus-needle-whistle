@@ -47,7 +47,7 @@ export interface Verdict {
   calls: FunctionCall[];
   bar: number;
   why: string;
-  /** A confident call that can't be undone: an unattended run counts the written step as the confirmation. */
+  /** A confident irreversible call: the written step counts as its confirmation. */
   irreversible?: boolean;
 }
 

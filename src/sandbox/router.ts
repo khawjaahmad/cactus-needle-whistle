@@ -1,4 +1,4 @@
-/** Hash routing: the studio's driver and the exported specs navigate by `#/<page>`. */
+/** Hash routing: the studio's driver navigates by `#/<page>`. */
 import { useSyncExternalStore } from 'react';
 
 const subscribe = (onChange: () => void) => {

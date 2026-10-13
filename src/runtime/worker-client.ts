@@ -1,28 +1,21 @@
-/*
- * The page side of an engine worker (engine-worker.ts): tracks its loading status for whoever
- * subscribes (React reads it with useSyncExternalStore), and turns each request into a promise of
- * its result or error.
- */
+/** The page side of an engine worker: its loading status, and a promise per request. */
 import type { EngineStatus, Reply, WorkerEvent } from './protocol.ts';
 
 const megabytes = (n: number) => (n / 1e6).toFixed(1);
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export interface WorkerClient<Request, Result> {
-  request(message: Request, transfer?: Transferable[]): Promise<Reply<Result>>;
+  /** `R`: the result of this request type, for a worker that answers several. */
+  request<R = Result>(message: Request, transfer?: Transferable[]): Promise<Reply<R>>;
   subscribe(listener: () => void): () => void;
   getStatus(): EngineStatus;
 }
 
-/**
- * @param worker  the engine's worker, constructed by the caller so Vite can find and bundle it
- * @param name    what the status line calls the engine, e.g. 'model' or 'Whistle'
- */
 export function createWorkerClient<Request extends { type: string }, Result>(
   worker: Worker,
   { name, startingText }: { name: string; startingText: string },
 ): WorkerClient<Request, Result> {
-  const pending = new Map<number, (reply: Reply<Result>) => void>();
+  const pending = new Map<number, (reply: Reply<unknown>) => void>();
   const listeners = new Set<() => void>();
   let status: EngineStatus = { state: 'loading', text: startingText };
   let nextId = 1;
@@ -46,7 +39,7 @@ export function createWorkerClient<Request extends { type: string }, Result>(
         text: `${capitalize(name)} ready · ${seconds} s${data.cached ? ' from cache' : ''}`,
       });
     } else if (data.id != null && pending.has(data.id)) {
-      pending.get(data.id)?.(data as Reply<Result>);
+      pending.get(data.id)?.(data as Reply<unknown>);
       pending.delete(data.id);
     } else if (data.type === 'error') {
       setStatus({ state: 'failed', text: data.message });
@@ -57,10 +50,10 @@ export function createWorkerClient<Request extends { type: string }, Result>(
   };
 
   return {
-    request(message, transfer = []) {
+    request<R>(message: Request, transfer: Transferable[] = []) {
       const id = nextId++;
-      return new Promise((resolve) => {
-        pending.set(id, resolve);
+      return new Promise<Reply<R>>((resolve) => {
+        pending.set(id, resolve as (reply: Reply<unknown>) => void);
         worker.postMessage({ ...message, id }, transfer);
       });
     },

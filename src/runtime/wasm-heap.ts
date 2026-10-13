@@ -5,7 +5,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 export function createHeap(M: HeapModule) {
-  /** A NUL-terminated copy of `text` on the heap, or 0 (NULL) for null. The caller frees it. */
+  /** A NUL-terminated copy of `text` on the heap, or 0 (NULL) for null. */
   const cstr = (text: string | null) => {
     if (text == null) return 0;
     const bytes = encoder.encode(text);
@@ -39,7 +39,7 @@ export function createHeap(M: HeapModule) {
   /** The NUL-terminated string at `ptr`, or '' for NULL. */
   const readString = (ptr: number) => {
     if (!ptr) return '';
-    const heap = M.HEAPU8; // read after the call that wrote it: memory growth replaces the view
+    const heap = M.HEAPU8;
     return decoder.decode(heap.subarray(ptr, heap.indexOf(0, ptr)));
   };
 

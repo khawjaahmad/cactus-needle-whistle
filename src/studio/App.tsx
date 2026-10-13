@@ -1,9 +1,4 @@
-/*
- * Needle Test Studio: a manual test case in plain English runs against Acme Admin, one step at a
- * time, with Needle 3 deciding each step's call (lib/run-case.ts). The suite tab runs the
- * environment's frozen 32-case suite in the browser, and a case can be dictated with Cactus
- * Whistle. This component wires the pieces together; the logic lives in hooks/ and lib/.
- */
+/** Needle Test Studio: plain-English test cases run against Acme Admin by Needle 3. */
 import { useState } from 'react';
 import { createAcmeDriver, resetUrl } from '../acme/driver.ts';
 import { vocabulary } from '../acme/tools.ts';
@@ -12,47 +7,57 @@ import { CaseEditor } from './components/CaseEditor.tsx';
 import { CaseReport } from './components/CaseReport.tsx';
 import { DictateButton, DictationStatus } from './components/Dictation.tsx';
 import { Header } from './components/Header.tsx';
-import { SpecPanel } from './components/SpecPanel.tsx';
 import { SuitePanel } from './components/SuitePanel.tsx';
 import { Tabs, type TabId } from './components/Tabs.tsx';
-import { agent, dictation } from './engines.ts';
+import type { AgentMode } from './components/agent/AgentOrb.tsx';
+import { WhistlePanel } from './components/WhistlePanel.tsx';
+import { agent, whistle } from './engines.ts';
 import { useCaseDraft } from './hooks/useCaseDraft.ts';
 import { useCaseRunner } from './hooks/useCaseRunner.ts';
 import { useDictation } from './hooks/useDictation.ts';
 import { useEngineStatus } from './hooks/useEngineStatus.ts';
 import { useSuiteRunner } from './hooks/useSuiteRunner.ts';
+import { useWhistleLab } from './hooks/useWhistleLab.ts';
 import { EXAMPLES } from './lib/examples.ts';
 
-// Resolved against the page, not this module: the sandbox page sits next to index.html.
 const APP_BASE = new URL('sandbox/#', location.href).href;
-const SPEC_APP_URL = new URL('sandbox/?reset#', location.href).href;
 const FIRST_LOAD = resetUrl(APP_BASE);
 
-// One app frame for the page's lifetime; the driver picks it up from its first load.
-const driver = createAcmeDriver({ baseUrl: APP_BASE });
+const driver = createAcmeDriver({ baseUrl: APP_BASE, paceMs: 320, typeMs: 24 });
 
 export function App() {
   const engine = useEngineStatus(agent);
+  const speechEngine = useEngineStatus(whistle);
   const [tab, setTab] = useState<TabId>('app');
-  const [spec, setSpec] = useState('');
 
   const draft = useCaseDraft(EXAMPLES[0]);
   const caseRunner = useCaseRunner({
     agent,
     driver,
-    specAppUrl: SPEC_APP_URL,
     onStart: () => setTab('app'),
-    onPassed: setSpec,
   });
   const suiteRunner = useSuiteRunner(agent);
-  const speech = useDictation({ dictation, vocabulary: () => vocabulary(driver.state()), onSteps: draft.append });
+  const speech = useDictation({ whistle, vocabulary: () => vocabulary(driver.state()), onSteps: draft.append });
+  const lab = useWhistleLab(whistle);
 
   const busy = caseRunner.running || suiteRunner.running;
   const canRun = engine.state === 'ready' && !busy && !speech.recording;
 
+  const active = caseRunner.report?.steps.find((s) => ['decoding', 'running', 'review'].includes(s.state));
+  const mode: AgentMode =
+    speech.recording || lab.mode === 'recording' || lab.mode === 'live'
+      ? 'listening'
+      : active?.state === 'running'
+        ? 'acting'
+        : active?.state === 'review'
+          ? 'waiting'
+          : active || suiteRunner.running || speech.transcribing || lab.mode === 'working'
+            ? 'thinking'
+            : 'idle';
+
   return (
     <>
-      <Header status={engine} />
+      <Header mode={mode} needle={engine} whistle={speechEngine} />
       <div className="studio">
         <section className="pane" aria-label="Test case">
           <div className="section">
@@ -74,21 +79,16 @@ export function App() {
                 onClick={speech.toggle}
               />
             </div>
-            <DictationStatus status={speech.status} level={speech.level} />
+            <DictationStatus status={speech.status} peak={speech.level?.peak ?? null} busy={speech.transcribing} />
           </div>
-          <CaseReport report={caseRunner.report} onAnswer={caseRunner.answer} onViewSpec={() => setTab('spec')} />
+          <CaseReport report={caseRunner.report} onAnswer={caseRunner.answer} />
         </section>
 
         <section className="pane" aria-label="Output">
           <Tabs active={tab} onSelect={setTab} />
-          <AppFrame
-            src={FIRST_LOAD}
-            hidden={tab !== 'app'}
-            onLoad={driver.attach}
-            onReset={() => void driver.reset()}
-          />
+          <AppFrame src={FIRST_LOAD} hidden={tab !== 'app'} driver={driver} onReset={() => void driver.reset()} />
           <SuitePanel report={suiteRunner.report} hidden={tab !== 'suite'} disabled={!canRun} onRun={suiteRunner.run} />
-          <SpecPanel spec={spec} hidden={tab !== 'spec'} />
+          <WhistlePanel lab={lab} hidden={tab !== 'whistle'} />
         </section>
       </div>
     </>

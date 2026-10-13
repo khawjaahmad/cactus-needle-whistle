@@ -1,7 +1,4 @@
-/**
- * The two vendored Emscripten builds (vendor/needle3-<rev>/needle.js), as far as the bindings use
- * them. Pointers are heap offsets; strings are NUL-terminated UTF-8 on the heap (wasm-heap.ts).
- */
+/** The two vendored Emscripten builds (vendor/needle3-<rev>/needle.js), as far as the bindings use them. */
 
 export interface HeapModule {
   /** Replaced whenever the heap grows: read it after the call that may have grown it. */
@@ -31,7 +28,9 @@ export interface WhistleModule extends HeapModule {
     out: number,
     capacity: number,
   ): number;
+  /** `text` is NULL for audio; a NULL `out` returns the float count it needs. */
+  _needle_embed(text: number, samples: number, count: number, out: number, capacity: number): number;
 }
 
-/** A build's factory. `wasmBinary` skips its own lookup of needle.wasm (runtime/engine-worker.ts). */
+/** A build's factory. */
 export type CreateModule<M> = (options?: { wasmBinary?: ArrayBuffer }) => Promise<M>;

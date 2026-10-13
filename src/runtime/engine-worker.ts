@@ -1,13 +1,8 @@
-/*
- * The worker side of an engine: boots one Emscripten build against one pinned archive, then
- * serves requests one at a time (protocol.ts). Both engines are a single global, non-thread-safe
- * instance (needle.h), and a worker handles one message at a time, so every call is serialised here.
- */
+/** The worker side of an engine: boots one build and archive, then serves requests one at a time. */
 import type { CreateModule } from './emscripten.ts';
 import type { ModelPin } from './models.ts';
 import type { WorkerEvent } from './protocol.ts';
 
-// Typed by hand: the app compiles against the DOM lib, not the WebWorker one.
 const scope = self as unknown as {
   postMessage(message: WorkerEvent): void;
   onmessage: ((event: MessageEvent) => void) | null;
@@ -16,13 +11,7 @@ const scope = self as unknown as {
 const post = (message: WorkerEvent) => scope.postMessage(message);
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/**
- * Both vendored builds call their binary needle.wasm and resolve it against the worker's
- * directory, not the script they came from, and they ignore Module.locateFile. Left alone, one
- * would instantiate the other's binary: the exports line up by position, so nothing throws at
- * load, but needle_last_error binds to a function that wants an i64 and malloc returns the same
- * pointer every call. Handing over the bytes skips the lookup.
- */
+/** Hands each build its own needle.wasm bytes, since both would otherwise load the same file. */
 async function instantiate<M>(createModule: CreateModule<M>, wasmUrl: string) {
   const response = await fetch(new URL(wasmUrl, scope.location.href));
   if (!response.ok) throw new Error(`Could not load the engine (HTTP ${response.status}).`);
@@ -65,27 +54,18 @@ async function sha256(bytes: Uint8Array<ArrayBuffer>) {
   return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-interface ServeOptions<M, Engine, Request, Result> {
+interface ServeOptions<M, Engine> {
   model: ModelPin;
   /** The build's Emscripten factory. */
   createModule: CreateModule<M>;
   /** The build's needle.wasm, as Vite serves it. */
   wasmUrl: string;
   create: (module: M, archive: Uint8Array) => Engine;
-  /** The message type this worker answers. */
-  requestType: string;
-  /** Runs synchronously on the engine; its fields go into the result message. */
-  handle: (engine: Engine, request: Request) => Result;
+  /** One handler per message type this worker answers. */
+  handlers: Record<string, (engine: Engine, request: never) => object>;
 }
 
-export function serveEngine<M, Engine, Request, Result extends object>({
-  model,
-  createModule,
-  wasmUrl,
-  create,
-  requestType,
-  handle,
-}: ServeOptions<M, Engine, Request, Result>) {
+export function serveEngine<M, Engine>({ model, createModule, wasmUrl, create, handlers }: ServeOptions<M, Engine>) {
   let engine: Engine;
 
   const ready = (async () => {
@@ -101,9 +81,10 @@ export function serveEngine<M, Engine, Request, Result extends object>({
   scope.onmessage = async ({ data }) => {
     try {
       await ready;
-      if (data.type !== requestType) return;
+      const handle = handlers[data.type];
+      if (!handle) throw new Error(`This worker does not answer "${data.type}".`);
       const started = performance.now();
-      const result = handle(engine, data as Request);
+      const result = handle(engine, data as never);
       post({ type: 'result', id: data.id, ...result, ms: performance.now() - started });
     } catch (error) {
       post({ type: 'error', id: data.id, message: errorMessage(error) });

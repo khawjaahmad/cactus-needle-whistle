@@ -1,7 +1,4 @@
-/*
- * Acme Admin's persistence: users, settings and the session in localStorage. The studio's driver
- * reads the users through USERS_KEY, so the tool enums name the users the app really has.
- */
+/** Acme Admin's persistence: users, settings and the session in localStorage. */
 import { SEED, type AcmeUser } from '../acme/tools.ts';
 
 export const CREDENTIALS = { email: 'admin@acme.com', password: 'Passw0rd!' };
@@ -26,9 +23,7 @@ const read = <T>(key: string, fallback: T): T => {
 const write = (key: string, value: unknown) => {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Storage is off: the app still works for this page load.
-  }
+  } catch {}
 };
 
 /** `?reset` in the URL starts the app clean. */

@@ -7,16 +7,14 @@ export function CaseEditor({ draft }: { draft: CaseDraft }) {
   return (
     <>
       <div className="row spread">
-        <label className="label" htmlFor="example">
-          Test case
-        </label>
+        <span className="label">Test case</span>
         <select
           id="example"
           aria-label="Load an example test case"
           value=""
           onChange={(e) => e.target.value && draft.load(EXAMPLES[Number(e.target.value)])}
         >
-          <option value="">Load an example…</option>
+          <option value="">Examples</option>
           {EXAMPLES.map((example, i) => (
             <option key={example.name} value={i}>
               {example.name}
@@ -42,13 +40,11 @@ export function CaseEditor({ draft }: { draft: CaseDraft }) {
         id="steps"
         ref={stepsRef}
         spellCheck={false}
+        placeholder="One step per line"
+        title="Login: admin@acme.com / Passw0rd!"
         value={draft.steps}
         onChange={(e) => draft.setSteps(e.target.value)}
       />
-      <div className="meta">
-        One step per line, the way you'd write a manual test. Needle 3 maps each to one of Acme Admin's actions or
-        checks. Login: admin@acme.com / Passw0rd!
-      </div>
     </>
   );
 }

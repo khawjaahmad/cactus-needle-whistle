@@ -1,8 +1,4 @@
-/*
- * A pinned model archive for the Node scripts: downloaded once into .ref/, then checked against
- * its SHA-256 on every run. The browser keeps the same archive in the Cache API instead
- * (src/runtime/engine-worker.ts).
- */
+/** Pinned model archives for the Node scripts, cached in .ref/ and checked by SHA-256. */
 import { createHash } from 'node:crypto';
 import { createWriteStream, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { Readable } from 'node:stream';

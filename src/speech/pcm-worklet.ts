@@ -1,10 +1,5 @@
-/*
- * Collects microphone samples for Whistle: mono float frames from an AudioContext already
- * running at 16 kHz, plus a peak level per block for the meter. The main thread joins the
- * frames; nothing is resampled here. Loaded by recorder.ts with audioWorklet.addModule().
- */
+/** AudioWorklet that posts 16 kHz mono microphone frames and their peak level. */
 
-// The AudioWorkletGlobalScope, which the DOM lib doesn't describe.
 declare class AudioWorkletProcessor {
   readonly port: MessagePort;
 }
@@ -17,7 +12,6 @@ class PcmCollector extends AudioWorkletProcessor {
 
     let peak = 0;
     for (let i = 0; i < channel.length; i += 1) peak = Math.max(peak, Math.abs(channel[i]));
-    // A copy: the render quantum's buffer is reused on the next call.
     this.port.postMessage({ frame: new Float32Array(channel), peak });
     return true;
   }

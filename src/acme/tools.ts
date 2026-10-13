@@ -1,17 +1,4 @@
-/*
- * The Needle 3 environment for Acme Admin, the app under test: its tool surface, system facts and
- * frozen test suite, shaped like the package's needle.environments (needle3-context.md §11).
- *
- * Designed by the rules in §10 and "How to Design Tools for Needle 3":
- *  - one tool per action, described by the actions it covers;
- *  - closed sets as enums named with the words people say, filled from the app's live state
- *    (the users that exist, the messages the app can show), so a step can only name real things;
- *  - free text (email, password, search) is copied verbatim, with its format in the description;
- *  - polar pairs as one enum (on / off);
- *  - checks carry triggers (§9) so a "verify" step reaches a check and can never change the app.
- *    Each check's trigger names the nouns it owns and excludes the others', using only negative
- *    lookaheads and plain patterns like the §9 examples.
- */
+/** The Needle 3 environment for Acme Admin: its tool schemas, vocabulary and system facts. */
 import type { PropertySchema, ToolEntry } from '../engine/types.ts';
 
 export interface AcmeUser {
@@ -43,10 +30,7 @@ export function messages(state: AcmeState) {
   ];
 }
 
-// minLength 1 is a grammar bound (§10): an empty string can't decode, so a required value the
-// request doesn't give withholds the call instead of coming back as "".
 const text = (description: string): PropertySchema => ({ type: 'string', minLength: 1, description });
-// An email address as a grammar pattern (§10: bounds in the schema, not in prose).
 const email = (description: string): PropertySchema => ({
   ...text(description),
   pattern: '^[^@\\s]+@[^@\\s]+\\.[a-z]+$',
@@ -64,7 +48,6 @@ const object = (properties: Record<string, PropertySchema>, required = Object.ke
 
 const not = (pattern: string) => String.raw`(?![\s\S]*${pattern})`;
 
-// Trigger pieces (§9): a verify verb, and the nouns each check owns.
 const either = (a: string, b: string) => String.raw`(${a}[\s\S]*${b}|${b}[\s\S]*${a})`;
 const VERIFY = String.raw`\b(verify|should|assert|expect|ensure|make sure|confirm|check that|check if)\b`;
 const EMAIL = String.raw`[\w.+-]+@[\w-]+\.\w+`;
@@ -72,12 +55,8 @@ const SETTING = String.raw`\b(two-factor|2fa|alerts?|theme|dark mode|light mode)
 const MESSAGE = String.raw`(["“]|\b(message|error|toast|notification|appears?|displayed|shown)\b)`;
 const PAGE = String.raw`(\b(page|url|redirected|dashboard|users|settings|login)\b|\s/\w)`;
 
-// Single-action triggers step aside for "and / then" so the model can emit several calls (§9),
-// and never fire on a verify step, which belongs to a check.
 const SINGLE_ACTION = String.raw`^(?![\s\S]*\b(and|then)\b)${not(VERIFY)}`;
 
-// "and" joins a second action only when an action verb follows it; in "log in with X and Y" it
-// just joins the credentials, so the sign-in trigger steps aside only for a following action.
 const ANOTHER_ACTION = String.raw`\b(and|then)\s+(open|go|navigate|invite|remove|delete|turn|switch|enable|disable|search|sign out|log out)\b`;
 
 const TRIGGERS = {
@@ -90,15 +69,10 @@ const TRIGGERS = {
   page: String.raw`^${not(EMAIL)}${not(SETTING)}${not(MESSAGE)}[\s\S]*${either(VERIFY, PAGE)}`,
 };
 
-/**
- * The tool schemas for the app as it is now. `state` is {users: [{email, name, role, status}]};
- * `known` adds emails the run has seen, so a check can name a user who was just removed.
- * Entries carry `risk` (gate only), which the engine never sees.
- */
+/** The tool schemas for the app as it is now. */
 export function acmeTools(state: AcmeState, known: string[] = []): ToolEntry[] {
   const emails = state.users.map((u) => u.email);
   const everyone = [...new Set([...emails, ...known])];
-  // A tool whose enum would be empty (no users to remove) can't be called, so it isn't offered.
   const usable = (tool: ToolEntry) => Object.values(tool.parameters.properties).every((p) => !p.enum || p.enum.length);
   const tools: ToolEntry[] = [
     {
@@ -191,11 +165,7 @@ export function acmeTools(state: AcmeState, known: string[] = []): ToolEntry[] {
   return tools.filter(usable);
 }
 
-/**
- * The words the schemas above are built from, as keyword bias for dictation. Whistle favours
- * them during its search, so the names a tester says out loud survive it and land in the enum
- * the step has to match. Same source as the enums: the app's live state.
- */
+/** The words the schemas above are built from, as keyword bias for dictation. */
 export function vocabulary(state: AcmeState) {
   return [
     ...state.users.flatMap((u) => [u.name, u.email]),

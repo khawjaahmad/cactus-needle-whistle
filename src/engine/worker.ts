@@ -1,10 +1,4 @@
-/*
- * Owns the Needle 3 engine off the main thread (runtime/engine-worker.ts has the protocol).
- *
- * Request: RunRequest. `tools` is the page's current catalog, enums filled from what is on the
- *          page right now.
- * Result:  Turn, plus `ms`.
- */
+/** Owns the Needle 3 engine off the main thread (runtime/engine-worker.ts has the protocol). */
 import createNeedle from '../../vendor/needle3-b274efc/needle.js';
 import wasmUrl from '../../vendor/needle3-b274efc/needle.wasm?url';
 import { serveEngine } from '../runtime/engine-worker.ts';
@@ -17,6 +11,7 @@ serveEngine({
   createModule: createNeedle,
   wasmUrl,
   create: createEngine,
-  requestType: 'run',
-  handle: (engine, { text, facts, tools }: RunRequest) => runTurn(engine, text, facts, loadCatalog(tools)),
+  handlers: {
+    run: (engine, { text, facts, tools }: RunRequest) => runTurn(engine, text, facts, loadCatalog(tools)),
+  },
 });

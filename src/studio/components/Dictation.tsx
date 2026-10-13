@@ -1,6 +1,5 @@
 import type { EngineStatus } from '../../runtime/protocol.ts';
-
-const METER_GAIN = 140;
+import { Waveform } from './agent/Waveform.tsx';
 
 interface Level {
   peak: number;
@@ -25,22 +24,20 @@ export function DictateButton({
         <rect x="5.5" y="1.5" width="5" height="8" rx="2.5" stroke="currentColor" strokeWidth="1.5" />
         <path d="M3 7.5a5 5 0 0 0 10 0M8 12.5V15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
-      <span>{recording && level ? `Stop · ${level.secondsLeft.toFixed(0)} s` : 'Dictate'}</span>
+      <span>{recording && level ? `${level.secondsLeft.toFixed(0)} s` : 'Dictate'}</span>
     </button>
   );
 }
 
-/** Whistle's status, then what the last dictation did; and the live peak meter while recording. */
-export function DictationStatus({ status, level }: { status: EngineStatus; level: Level | null }) {
+/** The live waveform while the microphone is open; otherwise a short note on the last dictation. */
+export function DictationStatus({ status, peak, busy }: { status: EngineStatus; peak: number | null; busy?: boolean }) {
+  if (peak != null) return <Waveform peak={peak} />;
   return (
-    <>
-      <div className="row" role="status" aria-live="polite">
-        <span className="dot" data-state={status.state} />
-        <span className="meta">{status.text}</span>
-      </div>
-      <div className="level" hidden={!level} aria-hidden="true">
-        <i style={{ width: `${Math.min(100, Math.round((level?.peak ?? 0) * METER_GAIN))}%` }} />
-      </div>
-    </>
+    <div className="row note" role="status" aria-live="polite" data-busy={busy}>
+      <span className="dot" data-state={status.state} />
+      <span key={status.text} className="meta">
+        {status.text}
+      </span>
+    </div>
   );
 }

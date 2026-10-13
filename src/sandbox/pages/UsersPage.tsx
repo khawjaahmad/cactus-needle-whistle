@@ -39,7 +39,7 @@ export function UsersPage({ users, onInvite, onRemove }: Props) {
         </div>
       </div>
       {inviting && <InviteForm users={users} onInvite={invite} onCancel={() => setInviting(false)} />}
-      {/* Scrolls sideways on a narrow screen instead of widening the page. */}
+
       <div className="table-wrap">
         <table>
           <thead>
